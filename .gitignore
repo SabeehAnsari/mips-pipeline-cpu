@@ -1,0 +1,33 @@
+# ---- Vivado generated project ----------------------------------------
+# Regenerate with:  vivado -mode batch -source build.tcl
+*.xpr
+*.jou
+*.log
+*.str
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.srcs/
+*.gen/
+.Xil/
+vivado*.backup.*
+webtalk*.jou
+webtalk*.log
+usage_statistics_webtalk*
+
+# ---- simulation output -----------------------------------------------
+*.out
+*.vcd
+*.wdb
+*.jou
+xsim.dir/
+work/
+
+# ---- editor / OS -----------------------------------------------------
+.vscode/
+*.swp
+Thumbs.db
+desktop.ini
+~$*
