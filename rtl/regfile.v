@@ -40,12 +40,15 @@ module regfile (
         for (i = 0; i < 32; i = i + 1) regs[i] = 32'd0;
     end
 
-    // TODO  combinational reads, with register 0 reading as zero
-    assign rd1 = 32'd0;
-    assign rd2 = 32'd0;
+    // Combinational reads, with register 0 reading as zero
+    assign rd1 = (ra1 == 5'd0) ? 32'd0 : regs[ra1];
+    assign rd2 = (ra2 == 5'd0) ? 32'd0 : regs[ra2];
 
-    // TODO  write on the NEGATIVE edge, when we is high and wa is not zero
+    // Write on the NEGATIVE edge, when we is high and wa is not zero
     always @(negedge clk) begin
+        if (we && wa != 5'd0) begin
+            regs[wa] <= wd;
+        end
     end
 
 endmodule
