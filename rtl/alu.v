@@ -35,18 +35,19 @@ module alu (
 
     always @(*) begin
         case (alu_ctrl)
-            `ALU_ADD  : result = 32'd0;   // TODO  a + b
-            `ALU_SUB  : result = 32'd0;   // TODO  a - b
-            `ALU_AND  : result = 32'd0;   // TODO  a & b
-            `ALU_OR   : result = 32'd0;   // TODO  a | b
-            `ALU_XOR  : result = 32'd0;   // TODO  a ^ b
-            `ALU_NOR  : result = 32'd0;   // TODO  ~(a | b)
-            `ALU_SLT  : result = 32'd0;   // TODO  signed   a < b ? 1 : 0
-            `ALU_SLTU : result = 32'd0;   // TODO  unsigned a < b ? 1 : 0
-            `ALU_SLL  : result = 32'd0;   // TODO  b << a[4:0]
-            `ALU_SRL  : result = 32'd0;   // TODO  b >> a[4:0]        (zero fill)
-            `ALU_SRA  : result = 32'd0;   // TODO  b >>> a[4:0]       (sign fill)
-            `ALU_LUI  : result = 32'd0;   // TODO  b << 16
+            `ALU_ADD  : result = a + b;   // TODO  a + b
+            `ALU_SUB  : result = a - b;   // TODO  a - b
+            `ALU_AND  : result = a & b;   // TODO  a & b
+            `ALU_OR   : result = a | b;   // TODO  a | b
+            `ALU_XOR  : result = a ^ b;   // TODO  a ^ b
+            `ALU_NOR  : result = ~(a | b);   // TODO  ~(a | b)
+            `ALU_SLT  : result = ($signed(a) < $signed(b)) ? 32'd1 : 32'd0;
+            `ALU_SLTU : result = (a < b)                   ? 32'd1 : 32'd0;
+            `ALU_SRA  : result = $signed(b) >>> a[4:0];
+            `ALU_SLL  : result = b << a[4:0];   // TODO  b << a[4:0]
+            `ALU_SRL  : result = b >> a[4:0];   // TODO  b >> a[4:0]        (zero fill)
+            `ALU_SRA  : result = b >>> a[4:0];   // TODO  b >>> a[4:0]       (sign fill)
+            `ALU_LUI  : result = b << 16;   // TODO  b << 16
             default   : result = 32'd0;
         endcase
     end
