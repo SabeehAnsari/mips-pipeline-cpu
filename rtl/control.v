@@ -12,14 +12,14 @@
 //  Record this in the mid-term report as a documented simplification.
 //
 //  How to fill it in:
-//   * default all outputs to a safe value at the top of the always block,
-//     then override per instruction. A safe default means reg_write = 0 and
-//     mem_write = 0, so that an unknown opcode cannot corrupt state.
-//   * the R-type opcode is shared by 14 instructions - switch on funct
-//     inside that branch.
-//   * for don't-care cells in the table, drive 0 rather than leaving the
-//     signal unassigned; an unassigned reg in an always @(*) block infers
-//     a latch, which Vivado will warn about and which will bite you later.
+//    * default all outputs to a safe value at the top of the always block,
+//      then override per instruction. A safe default means reg_write = 0 and
+//      mem_write = 0, so that an unknown opcode cannot corrupt state.
+//    * the R-type opcode is shared by 14 instructions - switch on funct
+//      inside that branch.
+//    * for don't-care cells in the table, drive 0 rather than leaving the
+//      signal unassigned; an unassigned reg in an always @(*) block infers
+//      a latch, which Vivado will warn about and which will bite you later.
 //==========================================================================
 `include "defines.vh"
 
@@ -63,17 +63,167 @@ module control (
 
             `OP_RTYPE: begin
                 case (funct)
-                    // TODO  add addu sub subu and or xor nor slt sltu
-                    // TODO  sll srl sra   (remember shamt_src = 1)
-                    // TODO  jr            (jump = JMP_JR, reg_write = 0)
+                    // Arithmetic & Logical R-Type
+                    `FN_ADD: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_ADD;
+                    end
+                    `FN_ADDU: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_ADD;
+                    end
+                    `FN_SUB: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_SUB;
+                    end
+                    `FN_SUBU: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_SUB;
+                    end
+                    `FN_AND: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_AND;
+                    end
+                    `FN_OR: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_OR;
+                    end
+                    `FN_XOR: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_XOR;
+                    end
+                    `FN_NOR: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_NOR;
+                    end
+                    `FN_SLT: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_SLT;
+                    end
+                    `FN_SLTU: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        alu_ctrl  = `ALU_SLTU;
+                    end
+
+                    // Shift R-Type Instructions
+                    `FN_SLL: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        shamt_src = 1'b1;
+                        alu_ctrl  = `ALU_SLL;
+                    end
+                    `FN_SRL: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        shamt_src = 1'b1;
+                        alu_ctrl  = `ALU_SRL;
+                    end
+                    `FN_SRA: begin
+                        reg_dst   = `DST_RD;
+                        reg_write = 1'b1;
+                        shamt_src = 1'b1;
+                        alu_ctrl  = `ALU_SRA;
+                    end
+
+                    // Jump Register R-Type
+                    `FN_JR: begin
+                        jump = `JMP_JR;
+                    end
+
                     default: ;   // unknown funct - leave the safe defaults
                 endcase
             end
 
-            // TODO  addi addiu slti andi ori xori lui
-            // TODO  lw sw
-            // TODO  beq bne
-            // TODO  j jal
+            // Arithmetic & Logical Immediate Instructions
+            `OP_ADDI: begin
+                alu_src   = 1'b1;
+                ext_op    = `EXT_SIGN;
+                reg_write = 1'b1;
+                alu_ctrl  = `ALU_ADD;
+            end
+            `OP_ADDIU: begin
+                alu_src   = 1'b1;
+                ext_op    = `EXT_SIGN;
+                reg_write = 1'b1;
+                alu_ctrl  = `ALU_ADD;
+            end
+            `OP_SLTI: begin
+                alu_src   = 1'b1;
+                ext_op    = `EXT_SIGN;
+                reg_write = 1'b1;
+                alu_ctrl  = `ALU_SLT;
+            end
+            `OP_ANDI: begin
+                alu_src   = 1'b1;
+                ext_op    = `EXT_ZERO;
+                reg_write = 1'b1;
+                alu_ctrl  = `ALU_AND;
+            end
+            `OP_ORI: begin
+                alu_src   = 1'b1;
+                ext_op    = `EXT_ZERO;
+                reg_write = 1'b1;
+                alu_ctrl  = `ALU_OR;
+            end
+            `OP_XORI: begin
+                alu_src   = 1'b1;
+                ext_op    = `EXT_ZERO;
+                reg_write = 1'b1;
+                alu_ctrl  = `ALU_XOR;
+            end
+            `OP_LUI: begin
+                alu_src   = 1'b1;
+                ext_op    = `EXT_ZERO;
+                reg_write = 1'b1;
+                alu_ctrl  = `ALU_LUI;
+            end
+
+            // Memory Access Instructions
+            `OP_LW: begin
+                alu_src    = 1'b1;
+                ext_op     = `EXT_SIGN;
+                mem_read   = 1'b1;
+                reg_write  = 1'b1;
+                mem_to_reg = `WB_MEM;
+                alu_ctrl   = `ALU_ADD;
+            end
+            `OP_SW: begin
+                alu_src   = 1'b1;
+                ext_op    = `EXT_SIGN;
+                mem_write = 1'b1;
+                alu_ctrl  = `ALU_ADD;
+            end
+
+            // Branch Instructions
+            `OP_BEQ: begin
+                branch   = `BR_EQ;
+                alu_ctrl = `ALU_SUB;
+            end
+            `OP_BNE: begin
+                branch   = `BR_NE;
+                alu_ctrl = `ALU_SUB;
+            end
+
+            // Jump Instructions
+            `OP_J: begin
+                jump = `JMP_J;
+            end
+            `OP_JAL: begin
+                jump       = `JMP_J;
+                reg_dst    = `DST_RA;
+                reg_write  = 1'b1;
+                mem_to_reg = `WB_PC4;
+            end
 
             default: ;   // unknown opcode - behaves as a nop
         endcase
