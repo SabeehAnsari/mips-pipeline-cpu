@@ -40,7 +40,11 @@ module cpu_compare_tb;
     localparam HEX = "D:/fpga/mips_pipeline/tests/05_hazards.hex";
 
     localparam MAXC   = 400;
-    localparam INSTRS = 28;     // dynamic instruction count for this program
+    localparam INSTRS = 27;     // dynamic instructions up to and including the
+                                //  sentinel store, which is where both CPUs are
+                                //  measured. The halt loop is not counted.
+                                //  Cross-check: the single-cycle CPU must report
+                                //  exactly this many cycles, i.e. CPI 1.00.
 
     reg clk = 0;
     reg rst = 1;
@@ -80,7 +84,12 @@ module cpu_compare_tb;
         end
 
         @(posedge clk); @(posedge clk);
-        rst = 0;
+        #1 rst = 0;      // release reset BETWEEN clock edges, never on one.
+                         //  Assigning rst at the instant of a posedge is a race:
+                         //  whether the DUT's always @(posedge clk) blocks see the
+                         //  old or new value is scheduler-dependent, and Icarus and
+                         //  XSim resolve it differently - a one-cycle difference in
+                         //  every measurement taken afterwards.
 
         for (c = 0; c < MAXC; c = c + 1) begin
             @(posedge clk); #1;

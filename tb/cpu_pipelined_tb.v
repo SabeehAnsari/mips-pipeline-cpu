@@ -95,7 +95,12 @@ module cpu_pipelined_tb;
 
         @(posedge clk);
         @(posedge clk);
-        rst = 0;
+        #1 rst = 0;      // release reset BETWEEN clock edges, never on one.
+                         //  Assigning rst at the instant of a posedge is a race:
+                         //  whether the DUT's always @(posedge clk) blocks see the
+                         //  old or new value is scheduler-dependent, and Icarus and
+                         //  XSim resolve it differently - a one-cycle difference in
+                         //  every measurement taken afterwards.
 
         for (c = 0; c < CYCLES; c = c + 1) @(posedge clk);
 
