@@ -14,6 +14,20 @@ module cpu_pipelined #(
     wire stall;
     wire flush;
 
+    //--------------------------------------------- forward declarations
+    //  These are connected by module instances that appear earlier in the
+    //  file than the logic driving them: the register file reads the WB
+    //  signals, the hazard unit reads ID/EX, the forwarding unit reads
+    //  EX/MEM. Declaring them here stops Verilog creating implicit 1-bit
+    //  nets, which simulate deceptively and truncate under synthesis.
+    reg        mem_read_ex;
+    reg [4:0]  rt_ex;
+    reg        reg_write_mem;
+    reg [4:0]  wr_addr_mem;
+    reg        reg_write_wb;
+    reg [4:0]  wr_addr_wb;
+    wire [31:0] wr_data_wb;
+
     //======================================================================
     //  IF - instruction fetch
     //======================================================================
@@ -122,13 +136,13 @@ module cpu_pipelined #(
     reg [1:0]  reg_dst_ex;
     reg        alu_src_ex, shamt_src_ex;
     reg [3:0]  alu_ctrl_ex;
-    reg        mem_read_ex, mem_write_ex;
+    reg        mem_write_ex;
     reg [1:0]  branch_ex, jump_ex;
     reg        reg_write_ex;
     reg [1:0]  mem_to_reg_ex;
 
     reg [31:0] pc4_ex, rs_data_ex, rt_data_ex, imm_ext_ex;
-    reg [4:0]  rs_ex, rt_ex, rd_ex, shamt_ex;
+    reg [4:0]  rs_ex, rd_ex, shamt_ex;
     reg [25:0] jtarget_ex;
 
     // Phase 8 Edit 3: Bubble/clear on rst, stall, or flush
@@ -225,12 +239,10 @@ module cpu_pipelined #(
     //======================================================================
     reg        mem_read_mem, mem_write_mem;
     reg [1:0]  branch_mem, jump_mem;
-    reg        reg_write_mem;
     reg [1:0]  mem_to_reg_mem;
 
     reg [31:0] alu_result_mem, rt_data_mem, rs_data_mem;
     reg [31:0] branch_target_mem, jump_target_mem, pc4_mem;
-    reg [4:0]  wr_addr_mem;
     reg        zero_mem;
 
     // Phase 9 Edit 1: Clear EX/MEM on reset or control flush
@@ -297,10 +309,8 @@ module cpu_pipelined #(
     //======================================================================
     //  MEM/WB pipeline register
     //======================================================================
-    reg        reg_write_wb;
     reg [1:0]  mem_to_reg_wb;
     reg [31:0] alu_result_wb, mem_data_wb, pc4_wb;
-    reg [4:0]  wr_addr_wb;
 
     always @(posedge clk) begin
         if (rst) begin
@@ -323,7 +333,7 @@ module cpu_pipelined #(
     //======================================================================
     //  WB - write back
     //======================================================================
-    wire [31:0] wr_data_wb = (mem_to_reg_wb == `WB_MEM) ? mem_data_wb :
+    assign wr_data_wb = (mem_to_reg_wb == `WB_MEM) ? mem_data_wb :
                              (mem_to_reg_wb == `WB_PC4) ? pc4_wb : alu_result_wb;
 
     //======================================================================

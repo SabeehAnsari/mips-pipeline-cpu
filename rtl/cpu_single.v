@@ -74,6 +74,15 @@ module cpu_single #(
     input  wire rst
 );
 
+    //--------------------------------------------- forward declarations
+    //  Declared here because the module instances below connect to them
+    //  before the logic that drives them appears. Without this, Verilog
+    //  creates implicit 1-bit nets and the design silently truncates.
+    wire [4:0] wr_addr;
+    wire [31:0] alu_a;
+    wire [31:0] alu_b;
+    wire [31:0] wr_data;
+
     //---------------------------------------------------------- program counter
     reg  [31:0] pc;
     wire [31:0] pc_plus4 = pc + 32'd4;
@@ -169,17 +178,17 @@ module cpu_single #(
     //======================================================================
 
     // Destination register: rt, rd, or $31 (RA)
-    wire [4:0] wr_addr = (reg_dst == `DST_RD) ? rd :
+    assign wr_addr = (reg_dst == `DST_RD) ? rd :
                          (reg_dst == `DST_RA) ? 5'd31 : rt;
 
     // ALU operand A: rs_data, or shamt zero-extended to 32 bits
-    wire [31:0] alu_a = shamt_src ? {27'd0, shamt} : rs_data;
+    assign alu_a = shamt_src ? {27'd0, shamt} : rs_data;
 
     // ALU operand B: rt_data or sign/zero-extended immediate
-    wire [31:0] alu_b = alu_src ? imm_ext : rt_data;
+    assign alu_b = alu_src ? imm_ext : rt_data;
 
     // Write-back value: ALU result, memory data, or return address (pc_plus4)
-    wire [31:0] wr_data = (mem_to_reg == `WB_MEM) ? mem_data :
+    assign wr_data = (mem_to_reg == `WB_MEM) ? mem_data :
                           (mem_to_reg == `WB_PC4) ? pc_plus4 : alu_result;
 
     // Branch condition logic
