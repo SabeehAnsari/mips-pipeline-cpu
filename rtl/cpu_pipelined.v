@@ -1,49 +1,5 @@
 //==========================================================================
 //  cpu_pipelined.v  -  five-stage pipelined MIPS32 CPU
-//
-//  STEP 6.  Pipeline registers only. No forwarding, no stalling, no
-//  flushing - those are steps 7, 8 and 9, and each gets its own test.
-//
-//  At this stage the CPU is correct only for programs that avoid hazards,
-//  which is what tests/04_pipeline_nops.asm does with explicit nop padding.
-//  Getting that program right proves the pipeline registers move data
-//  through the stages correctly, which is the one thing that must be true
-//  before any hazard logic can be debugged.
-//
-//  ---- NAMING -----------------------------------------------------------
-//
-//  Every signal carries the stage it belongs to as a suffix:
-//
-//      _if   in the fetch stage          _mem  in the memory stage
-//      _id   in the decode stage         _wb   in the write-back stage
-//      _ex   in the execute stage
-//
-//  A pipeline register is just a bank of flip-flops that copies the _id
-//  signals into the _ex signals on each clock edge. Once you have written
-//  one, the others are the same shape with different fields.
-//
-//  ---- WHY THE REGISTERS ARE HERE AND NOT SEPARATE MODULES --------------
-//
-//  The proposal lists IF/ID, ID/EX, EX/MEM and MEM/WB as modules. They are
-//  implemented here as register banks inside the top level instead, because
-//  ID/EX alone carries twenty fields and a separate module would mean forty
-//  ports of pure boilerplate. More importantly, stalling and flushing in
-//  steps 8 and 9 modify these registers, and inline banks make that a
-//  two-line change rather than a port-list rewrite. Record this in the
-//  mid-term report alongside the other documented deviations.
-//
-//  ---- WHAT TO WRITE ----------------------------------------------------
-//
-//  IF/ID is written for you as the worked example. You write:
-//
-//    1. the ID/EX, EX/MEM and MEM/WB register banks
-//    2. the EX-stage muxes and targets   (same logic as cpu_single.v,
-//                                        with _ex suffixes)
-//    3. the MEM-stage branch decision and next-PC selection
-//    4. the WB-stage write-back mux
-//
-//  Most of it is cpu_single.v with suffixes added. The genuinely new part
-//  is deciding WHICH STAGE each piece of logic belongs in.
 //==========================================================================
 `include "defines.vh"
 
@@ -53,6 +9,10 @@ module cpu_pipelined #(
     input  wire clk,
     input  wire rst
 );
+
+    // Dynamic hazard/flush signals
+    wire stall;
+    wire flush;
 
     //======================================================================
     //  IF - instruction fetch
@@ -67,26 +27,27 @@ module cpu_pipelined #(
         .instr (instr_if)
     );
 
-    // Program counter - synchronous reset to `TEXT_BASE
+    // Phase 8 Edit 1: Hold PC on stall
     always @(posedge clk) begin
         if (rst) begin
             pc <= `TEXT_BASE;
-        end else begin
+        end else if (!stall) begin
             pc <= pc_next;
         end
     end
 
     //======================================================================
-    //  IF/ID pipeline register    <-- worked example, already written
+    //  IF/ID pipeline register
     //======================================================================
     reg [31:0] instr_id;
     reg [31:0] pc4_id;
 
+    // Phase 8 Edit 2: Add flush (priority) and stall branches
     always @(posedge clk) begin
-        if (rst) begin
-            instr_id <= 32'd0;      // 32'd0 is sll $zero,$zero,0, i.e. nop
+        if (rst || flush) begin
+            instr_id <= 32'd0;      // Inject NOP on reset or branch/jump flush
             pc4_id   <= 32'd0;
-        end else begin
+        end else if (!stall) begin
             instr_id <= instr_if;
             pc4_id   <= pc4_if;
         end
@@ -134,7 +95,7 @@ module cpu_pipelined #(
         .clk (clk),
         .ra1 (rs_id),
         .ra2 (rt_id),
-        .wa  (wr_addr_wb),          // written from the WB stage
+        .wa  (wr_addr_wb),
         .wd  (wr_data_wb),
         .we  (reg_write_wb),
         .rd1 (rs_data_id),
@@ -145,6 +106,14 @@ module cpu_pipelined #(
         .imm    (imm_id),
         .ext_op (ext_op_id),
         .out    (imm_ext_id)
+    );
+
+    hazard_unit u_hazard (
+        .idex_memread (mem_read_ex),
+        .idex_rt      (rt_ex),
+        .ifid_rs      (rs_id),
+        .ifid_rt      (rt_id),
+        .stall        (stall)
     );
 
     //======================================================================
@@ -162,8 +131,9 @@ module cpu_pipelined #(
     reg [4:0]  rs_ex, rt_ex, rd_ex, shamt_ex;
     reg [25:0] jtarget_ex;
 
+    // Phase 8 Edit 3: Bubble/clear on rst, stall, or flush
     always @(posedge clk) begin
-        if (rst) begin
+        if (rst || stall || flush) begin
             reg_dst_ex    <= `DST_RT;
             alu_src_ex    <= 1'b0;
             shamt_src_ex  <= 1'b0;
@@ -211,24 +181,36 @@ module cpu_pipelined #(
     //======================================================================
     //  EX - execute
     //======================================================================
+    wire [1:0] forward_a, forward_b;
+
+    forwarding_unit u_fwd (
+        .idex_rs        (rs_ex),
+        .idex_rt        (rt_ex),
+        .exmem_rd       (wr_addr_mem),
+        .exmem_regwrite (reg_write_mem),
+        .memwb_rd       (wr_addr_wb),
+        .memwb_regwrite (reg_write_wb),
+        .forward_a      (forward_a),
+        .forward_b      (forward_b)
+    );
+
+    wire [31:0] rs_fwd_ex = (forward_a == `FWD_MEM) ? alu_result_mem :
+                            (forward_a == `FWD_WB)  ? wr_data_wb : rs_data_ex;
+
+    wire [31:0] rt_fwd_ex = (forward_b == `FWD_MEM) ? alu_result_mem :
+                            (forward_b == `FWD_WB)  ? wr_data_wb : rt_data_ex;
+
     wire [31:0] alu_result_ex;
     wire        zero_ex;
 
-    // Destination register: rd_ex, 5'd31, or rt_ex, chosen by reg_dst_ex
     wire [4:0] wr_addr_ex = (reg_dst_ex == `DST_RD) ? rd_ex :
                             (reg_dst_ex == `DST_RA) ? 5'd31 : rt_ex;
 
-    // ALU operand A: shamt_ex zero-extended, or rs_data_ex
-    wire [31:0] alu_a_ex = shamt_src_ex ? {27'd0, shamt_ex} : rs_data_ex;
+    wire [31:0] alu_a_ex = shamt_src_ex ? {27'd0, shamt_ex} : rs_fwd_ex;
+    wire [31:0] alu_b_ex = alu_src_ex   ? imm_ext_ex        : rt_fwd_ex;
 
-    // ALU operand B: imm_ext_ex or rt_data_ex
-    wire [31:0] alu_b_ex = alu_src_ex ? imm_ext_ex : rt_data_ex;
-
-    // Branch target: pc4_ex + (imm_ext_ex << 2)
     wire [31:0] branch_target_ex = pc4_ex + (imm_ext_ex << 2);
-
-    // Jump target: { pc4_ex[31:28], jtarget_ex, 2'b00 }
-    wire [31:0] jump_target_ex = {pc4_ex[31:28], jtarget_ex, 2'b00};
+    wire [31:0] jump_target_ex   = {pc4_ex[31:28], jtarget_ex, 2'b00};
 
     alu u_alu (
         .a        (alu_a_ex),
@@ -251,8 +233,9 @@ module cpu_pipelined #(
     reg [4:0]  wr_addr_mem;
     reg        zero_mem;
 
+    // Phase 9 Edit 1: Clear EX/MEM on reset or control flush
     always @(posedge clk) begin
-        if (rst) begin
+        if (rst || flush) begin
             mem_read_mem      <= 1'b0;
             mem_write_mem     <= 1'b0;
             branch_mem        <= `BR_NONE;
@@ -277,8 +260,8 @@ module cpu_pipelined #(
             mem_to_reg_mem    <= mem_to_reg_ex;
 
             alu_result_mem    <= alu_result_ex;
-            rt_data_mem       <= rt_data_ex;
-            rs_data_mem       <= rs_data_ex;
+            rt_data_mem       <= rt_fwd_ex;
+            rs_data_mem       <= rs_fwd_ex;
             branch_target_mem <= branch_target_ex;
             jump_target_mem   <= jump_target_ex;
             pc4_mem           <= pc4_ex;
@@ -288,7 +271,7 @@ module cpu_pipelined #(
     end
 
     //======================================================================
-    //  MEM - memory access, and where branches are resolved
+    //  MEM - memory access, branch & jump resolution
     //======================================================================
     wire [31:0] mem_data_mem;
 
@@ -301,14 +284,15 @@ module cpu_pipelined #(
         .rd   (mem_data_mem)
     );
 
-    // Branch taken: BR_EQ with zero_mem set, or BR_NE with it clear
     wire branch_taken_mem = ((branch_mem == `BR_EQ) &&  zero_mem) ||
                             ((branch_mem == `BR_NE) && !zero_mem);
 
-    // Next PC selection in priority order
     assign pc_next = (jump_mem == `JMP_JR) ? rs_data_mem :
                      (jump_mem == `JMP_J)  ? jump_target_mem :
                      branch_taken_mem      ? branch_target_mem : pc4_if;
+
+    // Phase 9 Edit 2: Continuous assign for control flush (taken branch or any jump)
+    assign flush = branch_taken_mem || (jump_mem != `JMP_NONE);
 
     //======================================================================
     //  MEM/WB pipeline register
@@ -339,9 +323,31 @@ module cpu_pipelined #(
     //======================================================================
     //  WB - write back
     //======================================================================
-
-    // Write-back value, chosen by mem_to_reg_wb
     wire [31:0] wr_data_wb = (mem_to_reg_wb == `WB_MEM) ? mem_data_wb :
                              (mem_to_reg_wb == `WB_PC4) ? pc4_wb : alu_result_wb;
+
+    //======================================================================
+    //  Performance counters - instrumentation for the report
+    //
+    //  cpu_compare_tb reads stall_count and flush_count to break the cycle
+    //  total down into pipeline fill, stalls and flushes. The dynamic
+    //  instruction count comes from the program rather than from hardware,
+    //  which keeps these trivial and the measurement easy to defend.
+    //======================================================================
+    reg [31:0] cycle_count;
+    reg [31:0] stall_count;
+    reg [31:0] flush_count;
+
+    always @(posedge clk) begin
+        if (rst) begin
+            cycle_count <= 32'd0;
+            stall_count <= 32'd0;
+            flush_count <= 32'd0;
+        end else begin
+            cycle_count <= cycle_count + 32'd1;
+            if (stall) stall_count <= stall_count + 32'd1;
+            if (flush) flush_count <= flush_count + 32'd1;
+        end
+    end
 
 endmodule

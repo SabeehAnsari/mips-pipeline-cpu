@@ -74,6 +74,11 @@
 `define EXT_ZERO  1'b0
 `define EXT_SIGN  1'b1
 
+//------------------------------------------------- forwarding select
+`define FWD_REG   2'b00     // straight from the register file
+`define FWD_WB    2'b01     // from MEM/WB - the write-back value
+`define FWD_MEM   2'b10     // from EX/MEM - the newer ALU result
+
 //------------------------------------------------- memory geometry
 //  MARS "Compact, Text at Address 0" configuration
 `define TEXT_BASE 32'h0000_0000
