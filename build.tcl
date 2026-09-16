@@ -4,15 +4,16 @@
 #  From the Vivado GUI:   Tools -> Run Tcl Script...  -> pick this file
 #  From a terminal:       vivado -mode batch -source build.tcl
 #
-#  This exists so the .xpr never has to be committed. If the project ever
-#  misbehaves, delete vivado_project/ and run this again.
+#  This exists so the .xpr never has to be committed to Git. If the project
+#  ever misbehaves, delete vivado_project/ and run this again.
 #
 #  To change which testbench runs, either edit SIM_TOP below and re-run,
 #  or in the GUI right-click the testbench in the Sources panel and choose
 #  "Set as Top".
 #=========================================================================
 
-set SIM_TOP "alu_tb"
+set SIM_TOP   "cpu_compare_tb"     ;# both CPUs, hardest program
+set SYNTH_TOP "cpu_pipelined"      ;# the deliverable design
 
 # anchor every path to this script's own directory, so it does not matter
 # where Vivado was launched from
@@ -43,6 +44,23 @@ if {[file exists $vh]} {
 set_property include_dirs [file join $root rtl] [get_filesets sources_1]
 set_property include_dirs [file join $root rtl] [get_filesets sim_1]
 
+#------------------------------------------------------------ constraints
+#  Without this the project has no clock definition, so the timing report
+#  comes back empty and Fmax cannot be computed.
+set xdc [file join $root constraints.xdc]
+if {[file exists $xdc]} {
+    add_files -fileset constrs_1 $xdc
+} else {
+    puts "WARNING: constraints.xdc not found - timing analysis will be empty."
+}
+
+#------------------------------------------------------------- synthesis
+#  Two modules could serve as top (cpu_single and cpu_pipelined), so say
+#  which one explicitly. Left to itself Vivado picks one, and it may not be
+#  the one you wanted.
+set_property top $SYNTH_TOP [get_filesets sources_1]
+update_compile_order -fileset sources_1
+
 #------------------------------------------------------------ simulation
 set_property top $SIM_TOP [get_filesets sim_1]
 set_property top_lib xil_defaultlib [get_filesets sim_1]
@@ -51,9 +69,12 @@ update_compile_order -fileset sim_1
 puts ""
 puts "============================================================"
 puts " Project created:   $proj_dir"
+puts " Synthesis top:     $SYNTH_TOP"
 puts " Simulation top:    $SIM_TOP"
 puts ""
 puts " Flow Navigator -> Run Simulation -> Run Behavioral Simulation"
 puts " Then read the Tcl Console for the pass/fail summary."
+puts ""
+puts " For Fmax and area figures run:  vivado -mode batch -source synth.tcl"
 puts "============================================================"
 puts ""
