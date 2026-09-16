@@ -46,7 +46,6 @@ module alu (
             `ALU_SRA  : result = $signed(b) >>> a[4:0];
             `ALU_SLL  : result = b << a[4:0];
             `ALU_SRL  : result = b >> a[4:0];
-            `ALU_SRA  : result = b >>> a[4:0];
             `ALU_LUI  : result = b << 16;
             default   : result = 32'd0;
         endcase

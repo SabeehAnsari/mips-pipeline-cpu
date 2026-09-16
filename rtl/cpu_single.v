@@ -71,8 +71,21 @@ module cpu_single #(
     parameter INIT_FILE = ""
 ) (
     input  wire clk,
-    input  wire rst
+    input  wire rst,
+
+    //  Debug outputs. These exist so that synthesis has something to work
+    //  backwards from: a module with no outputs is entirely dead logic and
+    //  Vivado optimises all of it away, giving a utilisation of zero and a
+    //  meaningless timing number. Between them these two signals depend on
+    //  the instruction memory, the control unit, the register file, the
+    //  ALU, the data memory and the PC logic, so nothing is stripped.
+    //  They are not connected on a board and cost no real hardware.
+    output wire [31:0] debug_pc,
+    output wire [31:0] debug_wr_data
 );
+
+    assign debug_pc      = pc;
+    assign debug_wr_data = wr_data;
 
     //--------------------------------------------- forward declarations
     //  Declared here because the module instances below connect to them
